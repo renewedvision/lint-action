@@ -9788,6 +9788,14 @@ class ClangFormat {
 					lastLine: line + lineCount - 1,
 					message: message
 				});
+
+			const prefixLines = (text, prefix) => {
+				var lines = text.split(/\n/);
+				if (text.length > 1 && text.endsWith("\n")) {
+					lines.pop();
+				}
+				return lines.map((line) => prefix + line).join("\n");
+			};
 	
 			for (const change of file.changes) {
 				if (change.removed) {
@@ -9796,11 +9804,11 @@ class ClangFormat {
 						line += lineCount;
 						error = "";
 					}
-					message += change.value.split(/\n/).map((line) => "- " + line).join("\n") + "\n";
+					message += prefixLines(change.value, "- ") + "\n";
 					lineCount = change.count;
 				} else if (change.added) {
 					message += "---\n";
-					message += change.value.split(/\n/).map((line) => "+ " + line).join("\n") + "\n";
+					message += prefixLines(change.value, "+ ");
 				} else {
 					if (message.length !== 0) {
 						addError();
@@ -9815,7 +9823,7 @@ class ClangFormat {
 				addError();
 			}
 		}
-		//console.log(result);
+		console.log(lintResult);
 
 		return lintResult;
 	}

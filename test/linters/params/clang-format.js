@@ -9,22 +9,11 @@ const extensions = ["c", "mm"];
 
 // Linting without auto-fixing
 function getLintParams(dir) {
-	const stderrFile1 = [
-		"file1.c:1:1: error: code should be clang-formatted [-Wclang-format-violations]",
-		"        #include <stdio.h>",
-		"^^^^^^^^",
-	].join(EOL);
-	const stderrFile2 = [
-		"file2.mm:1:26: error: code should be clang-formatted [-Wclang-format-violations]",
-		"@interface Foo : NSObject @end",
-		"                         ^",
-	].join(EOL);
 	return {
 		// Expected output of the linting function
 		cmdOutput: {
 			status: 1,
-			stderrParts: [stderrFile1, stderrFile2],
-			stderr: `${stderrFile1}\n${stderrFile2}`,
+			stdout: '[{"file":"file1.c","changes":[{"count":1,"removed":true,"value":"\\t#include <stdio.h>\\n"},{"count":1,"added":true,"value":"#include <stdio.h>\\n"},{"count":1,"value":"\\n"},{"count":7,"removed":true,"value":"int main(int argc, char* argv[]) {\\n\\tfor (int i = 0; i < argc; ++i)\\n\\t{\\n\\t\\tprintf(argv[i]);\\n\\t}\\n\\treturn  0;\\n}\\n"},{"count":6,"added":true,"value":"int main(int argc, char *argv[]) {\\n  for (int i = 0; i < argc; ++i) {\\n    printf(argv[i]);\\n  }\\n  return 0;\\n}"}]},{"file":"file2.mm","changes":[{"count":1,"removed":true,"value":"@interface Foo : NSObject @end\\n"},{"count":2,"added":true,"value":"@interface Foo : NSObject\\n@end"}]}]',
 		},
 		// Expected output of the parsing function
 		lintResult: {
@@ -35,13 +24,37 @@ function getLintParams(dir) {
 					path: "file1.c",
 					firstLine: 1,
 					lastLine: 1,
-					message: "code should be clang-formatted [-Wclang-format-violations]",
+					message: "- \t#include <stdio.h>\n- \n---\n+ #include <stdio.h>\n+ \n",
+				},
+				{
+					path: "file1.c",
+					firstLine: 3,
+					lastLine: 9,
+					message: "- int main(int argc, char* argv[]) {\n" +
+						'- \tfor (int i = 0; i < argc; ++i)\n' +
+						'- \t{\n' +
+						'- \t\tprintf(argv[i]);\n' +
+						'- \t}\n' +
+						'- \treturn  0;\n' +
+						'- }\n' +
+						'- \n' +
+						'---\n' +
+						'+ int main(int argc, char *argv[]) {\n' +
+						'+   for (int i = 0; i < argc; ++i) {\n' +
+						'+     printf(argv[i]);\n' +
+						'+   }\n' +
+						'+   return 0;\n' +
+						'+ }\n',
 				},
 				{
 					path: "file2.mm",
 					firstLine: 1,
 					lastLine: 1,
-					message: "code should be clang-formatted [-Wclang-format-violations]",
+					message: '- @interface Foo : NSObject @end\n' +
+						'- \n' +
+						'---\n' +
+						'+ @interface Foo : NSObject\n' +
+						'+ @end\n',
 				},
 			],
 		},

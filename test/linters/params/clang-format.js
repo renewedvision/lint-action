@@ -24,7 +24,7 @@ function getLintParams(dir) {
 					path: "file1.c",
 					firstLine: 1,
 					lastLine: 1,
-					message: "- \t#include <stdio.h>\n- \n---\n+ #include <stdio.h>\n+ \n",
+					message: "- \t#include <stdio.h>\n---\n+ #include <stdio.h>",
 				},
 				{
 					path: "file1.c",
@@ -37,24 +37,22 @@ function getLintParams(dir) {
 						'- \t}\n' +
 						'- \treturn  0;\n' +
 						'- }\n' +
-						'- \n' +
 						'---\n' +
 						'+ int main(int argc, char *argv[]) {\n' +
 						'+   for (int i = 0; i < argc; ++i) {\n' +
 						'+     printf(argv[i]);\n' +
 						'+   }\n' +
 						'+   return 0;\n' +
-						'+ }\n',
+						'+ }',
 				},
 				{
 					path: "file2.mm",
 					firstLine: 1,
 					lastLine: 1,
 					message: '- @interface Foo : NSObject @end\n' +
-						'- \n' +
 						'---\n' +
 						'+ @interface Foo : NSObject\n' +
-						'+ @end\n',
+						'+ @end',
 				},
 			],
 		},

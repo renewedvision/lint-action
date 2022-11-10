@@ -9823,7 +9823,7 @@ class ClangFormat {
 				addError();
 			}
 		}
-		console.log(lintResult);
+		//console.log(lintResult);
 
 		return lintResult;
 	}

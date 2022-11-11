@@ -9807,7 +9807,7 @@ class ClangFormat {
 				}
 				return lines.map((l) => {
 					const lineParts = l.match(/^(\s*)(.*?)(\s*)$/);
-					return prefix + visibleWhitespace(lineParts[1]) + lineParts[2] + visibleWhitespace(lineParts[3]);
+					return `<b>${prefix}</b>` + visibleWhitespace(lineParts[1]) + lineParts[2] + visibleWhitespace(lineParts[3]);
 				}).join("\n");
 			};
 	

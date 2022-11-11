@@ -1762,7 +1762,250 @@ exports.checkBypass = checkBypass;
 
 /***/ }),
 
-/***/ 6770:
+/***/ 9417:
+/***/ ((module) => {
+
+"use strict";
+
+module.exports = balanced;
+function balanced(a, b, str) {
+  if (a instanceof RegExp) a = maybeMatch(a, str);
+  if (b instanceof RegExp) b = maybeMatch(b, str);
+
+  var r = range(a, b, str);
+
+  return r && {
+    start: r[0],
+    end: r[1],
+    pre: str.slice(0, r[0]),
+    body: str.slice(r[0] + a.length, r[1]),
+    post: str.slice(r[1] + b.length)
+  };
+}
+
+function maybeMatch(reg, str) {
+  var m = str.match(reg);
+  return m ? m[0] : null;
+}
+
+balanced.range = range;
+function range(a, b, str) {
+  var begs, beg, left, right, result;
+  var ai = str.indexOf(a);
+  var bi = str.indexOf(b, ai + 1);
+  var i = ai;
+
+  if (ai >= 0 && bi > 0) {
+    if(a===b) {
+      return [ai, bi];
+    }
+    begs = [];
+    left = str.length;
+
+    while (i >= 0 && !result) {
+      if (i == ai) {
+        begs.push(i);
+        ai = str.indexOf(a, i + 1);
+      } else if (begs.length == 1) {
+        result = [ begs.pop(), bi ];
+      } else {
+        beg = begs.pop();
+        if (beg < left) {
+          left = beg;
+          right = bi;
+        }
+
+        bi = str.indexOf(b, i + 1);
+      }
+
+      i = ai < bi && ai >= 0 ? ai : bi;
+    }
+
+    if (begs.length) {
+      result = [ left, right ];
+    }
+  }
+
+  return result;
+}
+
+
+/***/ }),
+
+/***/ 1569:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+module.exports = __nccwpck_require__(4325);
+
+
+/***/ }),
+
+/***/ 4325:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+var exec = (__nccwpck_require__(2081).exec);
+var execSync = (__nccwpck_require__(2081).execSync);
+var fs = __nccwpck_require__(7147);
+var path = __nccwpck_require__(1017);
+var access = fs.access;
+var accessSync = fs.accessSync;
+var constants = fs.constants || fs;
+
+var isUsingWindows = process.platform == 'win32'
+
+var fileNotExists = function(commandName, callback){
+    access(commandName, constants.F_OK,
+    function(err){
+        callback(!err);
+    });
+};
+
+var fileNotExistsSync = function(commandName){
+    try{
+        accessSync(commandName, constants.F_OK);
+        return false;
+    }catch(e){
+        return true;
+    }
+};
+
+var localExecutable = function(commandName, callback){
+    access(commandName, constants.F_OK | constants.X_OK,
+        function(err){
+        callback(null, !err);
+    });
+};
+
+var localExecutableSync = function(commandName){
+    try{
+        accessSync(commandName, constants.F_OK | constants.X_OK);
+        return true;
+    }catch(e){
+        return false;
+    }
+}
+
+var commandExistsUnix = function(commandName, cleanedCommandName, callback) {
+
+    fileNotExists(commandName, function(isFile){
+
+        if(!isFile){
+            var child = exec('command -v ' + cleanedCommandName +
+                  ' 2>/dev/null' +
+                  ' && { echo >&1 ' + cleanedCommandName + '; exit 0; }',
+                  function (error, stdout, stderr) {
+                      callback(null, !!stdout);
+                  });
+            return;
+        }
+
+        localExecutable(commandName, callback);
+    });
+
+}
+
+var commandExistsWindows = function(commandName, cleanedCommandName, callback) {
+  // Regex from Julio from: https://stackoverflow.com/questions/51494579/regex-windows-path-validator
+  if (!(/^(?!(?:.*\s|.*\.|\W+)$)(?:[a-zA-Z]:)?(?:(?:[^<>:"\|\?\*\n])+(?:\/\/|\/|\\\\|\\)?)+$/m.test(commandName))) {
+    callback(null, false);
+    return;
+  }
+  var child = exec('where ' + cleanedCommandName,
+    function (error) {
+      if (error !== null){
+        callback(null, false);
+      } else {
+        callback(null, true);
+      }
+    }
+  )
+}
+
+var commandExistsUnixSync = function(commandName, cleanedCommandName) {
+  if(fileNotExistsSync(commandName)){
+      try {
+        var stdout = execSync('command -v ' + cleanedCommandName +
+              ' 2>/dev/null' +
+              ' && { echo >&1 ' + cleanedCommandName + '; exit 0; }'
+              );
+        return !!stdout;
+      } catch (error) {
+        return false;
+      }
+  }
+  return localExecutableSync(commandName);
+}
+
+var commandExistsWindowsSync = function(commandName, cleanedCommandName, callback) {
+  // Regex from Julio from: https://stackoverflow.com/questions/51494579/regex-windows-path-validator
+  if (!(/^(?!(?:.*\s|.*\.|\W+)$)(?:[a-zA-Z]:)?(?:(?:[^<>:"\|\?\*\n])+(?:\/\/|\/|\\\\|\\)?)+$/m.test(commandName))) {
+    return false;
+  }
+  try {
+      var stdout = execSync('where ' + cleanedCommandName, {stdio: []});
+      return !!stdout;
+  } catch (error) {
+      return false;
+  }
+}
+
+var cleanInput = function(s) {
+  if (/[^A-Za-z0-9_\/:=-]/.test(s)) {
+    s = "'"+s.replace(/'/g,"'\\''")+"'";
+    s = s.replace(/^(?:'')+/g, '') // unduplicate single-quote at the beginning
+      .replace(/\\'''/g, "\\'" ); // remove non-escaped single-quote if there are enclosed between 2 escaped
+  }
+  return s;
+}
+
+if (isUsingWindows) {
+  cleanInput = function(s) {
+    var isPathName = /[\\]/.test(s);
+    if (isPathName) {
+      var dirname = '"' + path.dirname(s) + '"';
+      var basename = '"' + path.basename(s) + '"';
+      return dirname + ':' + basename;
+    }
+    return '"' + s + '"';
+  }
+}
+
+module.exports = function commandExists(commandName, callback) {
+  var cleanedCommandName = cleanInput(commandName);
+  if (!callback && typeof Promise !== 'undefined') {
+    return new Promise(function(resolve, reject){
+      commandExists(commandName, function(error, output) {
+        if (output) {
+          resolve(commandName);
+        } else {
+          reject(error);
+        }
+      });
+    });
+  }
+  if (isUsingWindows) {
+    commandExistsWindows(commandName, cleanedCommandName, callback);
+  } else {
+    commandExistsUnix(commandName, cleanedCommandName, callback);
+  }
+};
+
+module.exports.sync = function(commandName) {
+  var cleanedCommandName = cleanInput(commandName);
+  if (isUsingWindows) {
+    return commandExistsWindowsSync(commandName, cleanedCommandName);
+  } else {
+    return commandExistsUnixSync(commandName, cleanedCommandName);
+  }
+};
+
+
+/***/ }),
+
+/***/ 2859:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -1802,7 +2045,7 @@ function convertChangesToDMP(changes) {
 
 /***/ }),
 
-/***/ 5121:
+/***/ 6982:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -1852,7 +2095,7 @@ function escapeHTML(s) {
 
 /***/ }),
 
-/***/ 6441:
+/***/ 546:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -1868,7 +2111,7 @@ exports.arrayDiff = void 0;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_base = _interopRequireDefault(__nccwpck_require__(6702))
+_base = _interopRequireDefault(__nccwpck_require__(1653))
 /*istanbul ignore end*/
 ;
 
@@ -1905,7 +2148,7 @@ function diffArrays(oldArr, newArr, callback) {
 
 /***/ }),
 
-/***/ 6702:
+/***/ 1653:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -2220,7 +2463,7 @@ function clonePath(path) {
 
 /***/ }),
 
-/***/ 9177:
+/***/ 1005:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -2236,7 +2479,7 @@ exports.characterDiff = void 0;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_base = _interopRequireDefault(__nccwpck_require__(6702))
+_base = _interopRequireDefault(__nccwpck_require__(1653))
 /*istanbul ignore end*/
 ;
 
@@ -2265,7 +2508,7 @@ function diffChars(oldStr, newStr, options) {
 
 /***/ }),
 
-/***/ 531:
+/***/ 8941:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -2281,7 +2524,7 @@ exports.cssDiff = void 0;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_base = _interopRequireDefault(__nccwpck_require__(6702))
+_base = _interopRequireDefault(__nccwpck_require__(1653))
 /*istanbul ignore end*/
 ;
 
@@ -2314,7 +2557,7 @@ function diffCss(oldStr, newStr, callback) {
 
 /***/ }),
 
-/***/ 7642:
+/***/ 6335:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -2331,13 +2574,13 @@ exports.jsonDiff = void 0;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_base = _interopRequireDefault(__nccwpck_require__(6702))
+_base = _interopRequireDefault(__nccwpck_require__(1653))
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_line = __nccwpck_require__(2945)
+_line = __nccwpck_require__(1591)
 /*istanbul ignore end*/
 ;
 
@@ -2485,7 +2728,7 @@ function canonicalize(obj, stack, replacementStack, replacer, key) {
 
 /***/ }),
 
-/***/ 2945:
+/***/ 1591:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -2502,13 +2745,13 @@ exports.lineDiff = void 0;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_base = _interopRequireDefault(__nccwpck_require__(6702))
+_base = _interopRequireDefault(__nccwpck_require__(1653))
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_params = __nccwpck_require__(7769)
+_params = __nccwpck_require__(5704)
 /*istanbul ignore end*/
 ;
 
@@ -2582,7 +2825,7 @@ function diffTrimmedLines(oldStr, newStr, callback) {
 
 /***/ }),
 
-/***/ 9403:
+/***/ 3577:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -2598,7 +2841,7 @@ exports.sentenceDiff = void 0;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_base = _interopRequireDefault(__nccwpck_require__(6702))
+_base = _interopRequireDefault(__nccwpck_require__(1653))
 /*istanbul ignore end*/
 ;
 
@@ -2631,7 +2874,7 @@ function diffSentences(oldStr, newStr, callback) {
 
 /***/ }),
 
-/***/ 7220:
+/***/ 6992:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -2648,13 +2891,13 @@ exports.wordDiff = void 0;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_base = _interopRequireDefault(__nccwpck_require__(6702))
+_base = _interopRequireDefault(__nccwpck_require__(1653))
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_params = __nccwpck_require__(7769)
+_params = __nccwpck_require__(5704)
 /*istanbul ignore end*/
 ;
 
@@ -2747,7 +2990,7 @@ function diffWordsWithSpace(oldStr, newStr, options) {
 
 /***/ }),
 
-/***/ 4000:
+/***/ 1672:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -2881,85 +3124,85 @@ Object.defineProperty(exports, "convertChangesToXML", ({
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_base = _interopRequireDefault(__nccwpck_require__(6702))
+_base = _interopRequireDefault(__nccwpck_require__(1653))
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_character = __nccwpck_require__(9177)
+_character = __nccwpck_require__(1005)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_word = __nccwpck_require__(7220)
+_word = __nccwpck_require__(6992)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_line = __nccwpck_require__(2945)
+_line = __nccwpck_require__(1591)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_sentence = __nccwpck_require__(9403)
+_sentence = __nccwpck_require__(3577)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_css = __nccwpck_require__(531)
+_css = __nccwpck_require__(8941)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_json = __nccwpck_require__(7642)
+_json = __nccwpck_require__(6335)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_array = __nccwpck_require__(6441)
+_array = __nccwpck_require__(546)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_apply = __nccwpck_require__(6147)
+_apply = __nccwpck_require__(7429)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_parse = __nccwpck_require__(7152)
+_parse = __nccwpck_require__(5870)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_merge = __nccwpck_require__(6495)
+_merge = __nccwpck_require__(2640)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_create = __nccwpck_require__(5919)
+_create = __nccwpck_require__(4543)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_dmp = __nccwpck_require__(6770)
+_dmp = __nccwpck_require__(2859)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_xml = __nccwpck_require__(5121)
+_xml = __nccwpck_require__(6982)
 /*istanbul ignore end*/
 ;
 
@@ -2971,7 +3214,7 @@ _xml = __nccwpck_require__(5121)
 
 /***/ }),
 
-/***/ 6147:
+/***/ 7429:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -2987,13 +3230,13 @@ exports.applyPatches = applyPatches;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_parse = __nccwpck_require__(7152)
+_parse = __nccwpck_require__(5870)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_distanceIterator = _interopRequireDefault(__nccwpck_require__(8995))
+_distanceIterator = _interopRequireDefault(__nccwpck_require__(5512))
 /*istanbul ignore end*/
 ;
 
@@ -3217,7 +3460,7 @@ function applyPatches(uniDiff, options) {
 
 /***/ }),
 
-/***/ 5919:
+/***/ 4543:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -3235,7 +3478,7 @@ exports.createPatch = createPatch;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_line = __nccwpck_require__(2945)
+_line = __nccwpck_require__(1591)
 /*istanbul ignore end*/
 ;
 
@@ -3497,7 +3740,7 @@ function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
 
 /***/ }),
 
-/***/ 6495:
+/***/ 2640:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
@@ -3513,19 +3756,19 @@ exports.merge = merge;
 /*istanbul ignore end*/
 var
 /*istanbul ignore start*/
-_create = __nccwpck_require__(5919)
+_create = __nccwpck_require__(4543)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_parse = __nccwpck_require__(7152)
+_parse = __nccwpck_require__(5870)
 /*istanbul ignore end*/
 ;
 
 var
 /*istanbul ignore start*/
-_array = __nccwpck_require__(2046)
+_array = __nccwpck_require__(8935)
 /*istanbul ignore end*/
 ;
 
@@ -4118,7 +4361,7 @@ function calcOldNewLineCount(lines) {
 
 /***/ }),
 
-/***/ 7152:
+/***/ 5870:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -4293,7 +4536,7 @@ function parsePatch(uniDiff) {
 
 /***/ }),
 
-/***/ 2046:
+/***/ 8935:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -4333,7 +4576,7 @@ function arrayStartsWith(array, start) {
 
 /***/ }),
 
-/***/ 8995:
+/***/ 5512:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -4398,7 +4641,7 @@ _default
 
 /***/ }),
 
-/***/ 7769:
+/***/ 5704:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -4426,249 +4669,6 @@ function generateOptions(options, defaults) {
   return defaults;
 }
 //# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy91dGlsL3BhcmFtcy5qcyJdLCJuYW1lcyI6WyJnZW5lcmF0ZU9wdGlvbnMiLCJvcHRpb25zIiwiZGVmYXVsdHMiLCJjYWxsYmFjayIsIm5hbWUiLCJoYXNPd25Qcm9wZXJ0eSJdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7O0FBQU8sU0FBU0EsZUFBVCxDQUF5QkMsT0FBekIsRUFBa0NDLFFBQWxDLEVBQTRDO0FBQ2pELE1BQUksT0FBT0QsT0FBUCxLQUFtQixVQUF2QixFQUFtQztBQUNqQ0MsSUFBQUEsUUFBUSxDQUFDQyxRQUFULEdBQW9CRixPQUFwQjtBQUNELEdBRkQsTUFFTyxJQUFJQSxPQUFKLEVBQWE7QUFDbEIsU0FBSyxJQUFJRyxJQUFULElBQWlCSCxPQUFqQixFQUEwQjtBQUN4QjtBQUNBLFVBQUlBLE9BQU8sQ0FBQ0ksY0FBUixDQUF1QkQsSUFBdkIsQ0FBSixFQUFrQztBQUNoQ0YsUUFBQUEsUUFBUSxDQUFDRSxJQUFELENBQVIsR0FBaUJILE9BQU8sQ0FBQ0csSUFBRCxDQUF4QjtBQUNEO0FBQ0Y7QUFDRjs7QUFDRCxTQUFPRixRQUFQO0FBQ0QiLCJzb3VyY2VzQ29udGVudCI6WyJleHBvcnQgZnVuY3Rpb24gZ2VuZXJhdGVPcHRpb25zKG9wdGlvbnMsIGRlZmF1bHRzKSB7XG4gIGlmICh0eXBlb2Ygb3B0aW9ucyA9PT0gJ2Z1bmN0aW9uJykge1xuICAgIGRlZmF1bHRzLmNhbGxiYWNrID0gb3B0aW9ucztcbiAgfSBlbHNlIGlmIChvcHRpb25zKSB7XG4gICAgZm9yIChsZXQgbmFtZSBpbiBvcHRpb25zKSB7XG4gICAgICAvKiBpc3RhbmJ1bCBpZ25vcmUgZWxzZSAqL1xuICAgICAgaWYgKG9wdGlvbnMuaGFzT3duUHJvcGVydHkobmFtZSkpIHtcbiAgICAgICAgZGVmYXVsdHNbbmFtZV0gPSBvcHRpb25zW25hbWVdO1xuICAgICAgfVxuICAgIH1cbiAgfVxuICByZXR1cm4gZGVmYXVsdHM7XG59XG4iXX0=
-
-
-/***/ }),
-
-/***/ 9417:
-/***/ ((module) => {
-
-"use strict";
-
-module.exports = balanced;
-function balanced(a, b, str) {
-  if (a instanceof RegExp) a = maybeMatch(a, str);
-  if (b instanceof RegExp) b = maybeMatch(b, str);
-
-  var r = range(a, b, str);
-
-  return r && {
-    start: r[0],
-    end: r[1],
-    pre: str.slice(0, r[0]),
-    body: str.slice(r[0] + a.length, r[1]),
-    post: str.slice(r[1] + b.length)
-  };
-}
-
-function maybeMatch(reg, str) {
-  var m = str.match(reg);
-  return m ? m[0] : null;
-}
-
-balanced.range = range;
-function range(a, b, str) {
-  var begs, beg, left, right, result;
-  var ai = str.indexOf(a);
-  var bi = str.indexOf(b, ai + 1);
-  var i = ai;
-
-  if (ai >= 0 && bi > 0) {
-    if(a===b) {
-      return [ai, bi];
-    }
-    begs = [];
-    left = str.length;
-
-    while (i >= 0 && !result) {
-      if (i == ai) {
-        begs.push(i);
-        ai = str.indexOf(a, i + 1);
-      } else if (begs.length == 1) {
-        result = [ begs.pop(), bi ];
-      } else {
-        beg = begs.pop();
-        if (beg < left) {
-          left = beg;
-          right = bi;
-        }
-
-        bi = str.indexOf(b, i + 1);
-      }
-
-      i = ai < bi && ai >= 0 ? ai : bi;
-    }
-
-    if (begs.length) {
-      result = [ left, right ];
-    }
-  }
-
-  return result;
-}
-
-
-/***/ }),
-
-/***/ 1569:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-module.exports = __nccwpck_require__(4325);
-
-
-/***/ }),
-
-/***/ 4325:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-
-
-var exec = (__nccwpck_require__(2081).exec);
-var execSync = (__nccwpck_require__(2081).execSync);
-var fs = __nccwpck_require__(7147);
-var path = __nccwpck_require__(1017);
-var access = fs.access;
-var accessSync = fs.accessSync;
-var constants = fs.constants || fs;
-
-var isUsingWindows = process.platform == 'win32'
-
-var fileNotExists = function(commandName, callback){
-    access(commandName, constants.F_OK,
-    function(err){
-        callback(!err);
-    });
-};
-
-var fileNotExistsSync = function(commandName){
-    try{
-        accessSync(commandName, constants.F_OK);
-        return false;
-    }catch(e){
-        return true;
-    }
-};
-
-var localExecutable = function(commandName, callback){
-    access(commandName, constants.F_OK | constants.X_OK,
-        function(err){
-        callback(null, !err);
-    });
-};
-
-var localExecutableSync = function(commandName){
-    try{
-        accessSync(commandName, constants.F_OK | constants.X_OK);
-        return true;
-    }catch(e){
-        return false;
-    }
-}
-
-var commandExistsUnix = function(commandName, cleanedCommandName, callback) {
-
-    fileNotExists(commandName, function(isFile){
-
-        if(!isFile){
-            var child = exec('command -v ' + cleanedCommandName +
-                  ' 2>/dev/null' +
-                  ' && { echo >&1 ' + cleanedCommandName + '; exit 0; }',
-                  function (error, stdout, stderr) {
-                      callback(null, !!stdout);
-                  });
-            return;
-        }
-
-        localExecutable(commandName, callback);
-    });
-
-}
-
-var commandExistsWindows = function(commandName, cleanedCommandName, callback) {
-  // Regex from Julio from: https://stackoverflow.com/questions/51494579/regex-windows-path-validator
-  if (!(/^(?!(?:.*\s|.*\.|\W+)$)(?:[a-zA-Z]:)?(?:(?:[^<>:"\|\?\*\n])+(?:\/\/|\/|\\\\|\\)?)+$/m.test(commandName))) {
-    callback(null, false);
-    return;
-  }
-  var child = exec('where ' + cleanedCommandName,
-    function (error) {
-      if (error !== null){
-        callback(null, false);
-      } else {
-        callback(null, true);
-      }
-    }
-  )
-}
-
-var commandExistsUnixSync = function(commandName, cleanedCommandName) {
-  if(fileNotExistsSync(commandName)){
-      try {
-        var stdout = execSync('command -v ' + cleanedCommandName +
-              ' 2>/dev/null' +
-              ' && { echo >&1 ' + cleanedCommandName + '; exit 0; }'
-              );
-        return !!stdout;
-      } catch (error) {
-        return false;
-      }
-  }
-  return localExecutableSync(commandName);
-}
-
-var commandExistsWindowsSync = function(commandName, cleanedCommandName, callback) {
-  // Regex from Julio from: https://stackoverflow.com/questions/51494579/regex-windows-path-validator
-  if (!(/^(?!(?:.*\s|.*\.|\W+)$)(?:[a-zA-Z]:)?(?:(?:[^<>:"\|\?\*\n])+(?:\/\/|\/|\\\\|\\)?)+$/m.test(commandName))) {
-    return false;
-  }
-  try {
-      var stdout = execSync('where ' + cleanedCommandName, {stdio: []});
-      return !!stdout;
-  } catch (error) {
-      return false;
-  }
-}
-
-var cleanInput = function(s) {
-  if (/[^A-Za-z0-9_\/:=-]/.test(s)) {
-    s = "'"+s.replace(/'/g,"'\\''")+"'";
-    s = s.replace(/^(?:'')+/g, '') // unduplicate single-quote at the beginning
-      .replace(/\\'''/g, "\\'" ); // remove non-escaped single-quote if there are enclosed between 2 escaped
-  }
-  return s;
-}
-
-if (isUsingWindows) {
-  cleanInput = function(s) {
-    var isPathName = /[\\]/.test(s);
-    if (isPathName) {
-      var dirname = '"' + path.dirname(s) + '"';
-      var basename = '"' + path.basename(s) + '"';
-      return dirname + ':' + basename;
-    }
-    return '"' + s + '"';
-  }
-}
-
-module.exports = function commandExists(commandName, callback) {
-  var cleanedCommandName = cleanInput(commandName);
-  if (!callback && typeof Promise !== 'undefined') {
-    return new Promise(function(resolve, reject){
-      commandExists(commandName, function(error, output) {
-        if (output) {
-          resolve(commandName);
-        } else {
-          reject(error);
-        }
-      });
-    });
-  }
-  if (isUsingWindows) {
-    commandExistsWindows(commandName, cleanedCommandName, callback);
-  } else {
-    commandExistsUnix(commandName, cleanedCommandName, callback);
-  }
-};
-
-module.exports.sync = function(commandName) {
-  var cleanedCommandName = cleanInput(commandName);
-  if (isUsingWindows) {
-    return commandExistsWindowsSync(commandName, cleanedCommandName);
-  } else {
-    return commandExistsUnixSync(commandName, cleanedCommandName);
-  }
-};
 
 
 /***/ }),
@@ -9675,16 +9675,16 @@ module.exports = Black;
 /***/ 6632:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
+const fs = __nccwpck_require__(7147);
+const path = __nccwpck_require__(1017);
+
+const diff = __nccwpck_require__(1672);
 const glob = __nccwpck_require__(1957);
 const { quoteAll } = __nccwpck_require__(4411);
 
 const { run } = __nccwpck_require__(9575);
 const commandExists = __nccwpck_require__(5265);
 const { initLintResult } = __nccwpck_require__(9149);
-
-const fs = __nccwpck_require__(7147);
-const Diff = __nccwpck_require__(4000);
-const path = __nccwpck_require__(1017);
 
 /** @typedef {import('../utils/lint-result').LintResult} LintResult */
 
@@ -9721,42 +9721,45 @@ class ClangFormat {
 			extensions.length === 1 ? `**/*.${extensions[0]}` : `**/*.{${extensions.join(",")}}`;
 		const files = glob.sync(pattern, { cwd: dir, nodir: true });
 		const escapedFiles = quoteAll(files).join(" ");
+
 		if (fix) {
 			const fixArg = fix ? "-i" : "--dry-run";
 			return run(`${prefix} clang-format ${fixArg} -Werror ${args} ${escapedFiles}`, {
 				dir,
 				ignoreErrors: true,
 			});
-		} else {
-			var retVal = {
-				status: 0,
-				stdout: "",
-				stderr: ""
-			};
-			var results = [];
-			for (var file of files) {
-				var result = run(`${prefix} clang-format -Werror ${args} ${file}`, {
-					dir,
-					ignoreErrors: true,
-				});
-				if (result.status != 0) {
-					retVal.status = result.status;
-				}
-				try {
-					const changes = Diff.diffLines(fs.readFileSync(path.join(dir, file), 'utf8'), result.stdout);
-					//console.log({ file: file, changes: changes });
-					if (changes.length > 0) {
-						results.push({ file: file, changes: changes });
-					}
-				} catch (err) {
-					retVal.stderr += "" + err;
-				}
-				retVal.stderr += result.stderr;
-			}
-			retVal.status = results.length > 0 ? 1 : 0;
-			retVal.stdout = JSON.stringify(results);
-			return retVal;
 		}
+
+		const retVal = {
+			status: 0,
+			stdout: "",
+			stderr: ""
+		};
+
+		const results = [];
+
+		for (const file of files) {
+			const result = run(`${prefix} clang-format -Werror ${args} ${file}`, {
+				dir,
+				ignoreErrors: true,
+			});
+			if (result.status !== 0) {
+				retVal.status = result.status;
+			}
+			try {
+				const changes = diff.diffLines(fs.readFileSync(path.join(dir, file), 'utf8'), result.stdout);
+				// console.log({ file, changes });
+				if (changes.length > 0) {
+					results.push({ file, changes });
+				}
+			} catch (err) {
+				retVal.stderr += `${err}`;
+			}
+			retVal.stderr += result.stderr;
+		}
+		retVal.status = results.length > 0 ? 1 : 0;
+		retVal.stdout = JSON.stringify(results);
+		return retVal;
 	}
 
 	/**
@@ -9775,55 +9778,62 @@ class ClangFormat {
 
 		lintResult.error = [];
 
-		//console.log(output);
+		// console.log(output);
 		const files = JSON.parse(output.stdout);
 		for (const file of files) {
-			var line = 1;
-			var lineCount = 1;
-			var message = "";
+			let line = 1;
+			let lineCount = 1;
+			let message = "";
 
-			const addError = () => lintResult.error.push({
-					path: file.file,
-					firstLine: line,
-					lastLine: line + lineCount - 1,
-					message: message
-				});
+			const addError = () => {
+				if (message.length !== 0) {
+					lintResult.error.push({
+						path: file.file,
+						firstLine: line,
+						lastLine: line + lineCount - 1,
+						message
+					});
+					line += lineCount;
+					message = "";
+				}
+			};
 
-			const prefixLines = (text, prefix) => {
-				var lines = text.split(/\n/);
-				if (text.length > 1 && text.endsWith("\n")) {
+			const visibleWhitespace = (text) => text.replace(/ /g, "·").replace(/\t/g, "▸\t");
+
+			const formatLines = (text, prefix) => {
+				const lines = text.split(/\n/);
+				if (text.endsWith("\n")) {
 					lines.pop();
 				}
-				return lines.map((line) => prefix + line).join("\n");
+				return lines.map((l) => {
+					const lineParts = l.match(/^(\s*)(.*?)(\s*)$/);
+					return prefix + visibleWhitespace(lineParts[1]) + lineParts[2] + visibleWhitespace(lineParts[3]);
+				}).join("\n");
 			};
 	
 			for (const change of file.changes) {
+				if (!change.added) {
+					addError();
+				}
+
 				if (change.removed) {
-					if (message.length !== 0) {
-						addError();
-						line += lineCount;
-						error = "";
-					}
-					message += prefixLines(change.value, "- ") + "\n";
+					message += `${formatLines(change.value, "- ")}\n`;
 					lineCount = change.count;
 				} else if (change.added) {
-					message += "---\n";
-					message += prefixLines(change.value, "+ ");
-				} else {
 					if (message.length !== 0) {
-						addError();
-						line += lineCount;
-						message = "";
+						message += "***\n";
+					} else {
+						lineCount = change.count;
 					}
+					message += formatLines(change.value, "+ ");
+				} else {
 					line += change.count;
 				}
 			}
 
-			if (message.length !== 0) {
-				addError();
-			}
+			addError();
 		}
-		//console.log(lintResult);
+		// console.log(lintResult);
 
 		return lintResult;
 	}

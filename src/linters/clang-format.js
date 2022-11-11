@@ -1,13 +1,13 @@
+const fs = require("fs");
+const path = require("path");
+
+const diff = require("diff");
 const glob = require("glob");
 const { quoteAll } = require("shescape");
 
 const { run } = require("../utils/action");
 const commandExists = require("../utils/command-exists");
 const { initLintResult } = require("../utils/lint-result");
-
-const fs = require("fs");
-const Diff = require("Diff");
-const path = require("path");
 
 /** @typedef {import('../utils/lint-result').LintResult} LintResult */
 
@@ -44,42 +44,45 @@ class ClangFormat {
 			extensions.length === 1 ? `**/*.${extensions[0]}` : `**/*.{${extensions.join(",")}}`;
 		const files = glob.sync(pattern, { cwd: dir, nodir: true });
 		const escapedFiles = quoteAll(files).join(" ");
+
 		if (fix) {
 			const fixArg = fix ? "-i" : "--dry-run";
 			return run(`${prefix} clang-format ${fixArg} -Werror ${args} ${escapedFiles}`, {
 				dir,
 				ignoreErrors: true,
 			});
-		} else {
-			var retVal = {
-				status: 0,
-				stdout: "",
-				stderr: ""
-			};
-			var results = [];
-			for (var file of files) {
-				var result = run(`${prefix} clang-format -Werror ${args} ${file}`, {
-					dir,
-					ignoreErrors: true,
-				});
-				if (result.status != 0) {
-					retVal.status = result.status;
-				}
-				try {
-					const changes = Diff.diffLines(fs.readFileSync(path.join(dir, file), 'utf8'), result.stdout);
-					//console.log({ file: file, changes: changes });
-					if (changes.length > 0) {
-						results.push({ file: file, changes: changes });
-					}
-				} catch (err) {
-					retVal.stderr += "" + err;
-				}
-				retVal.stderr += result.stderr;
-			}
-			retVal.status = results.length > 0 ? 1 : 0;
-			retVal.stdout = JSON.stringify(results);
-			return retVal;
 		}
+
+		const retVal = {
+			status: 0,
+			stdout: "",
+			stderr: ""
+		};
+
+		const results = [];
+
+		for (const file of files) {
+			const result = run(`${prefix} clang-format -Werror ${args} ${file}`, {
+				dir,
+				ignoreErrors: true,
+			});
+			if (result.status !== 0) {
+				retVal.status = result.status;
+			}
+			try {
+				const changes = diff.diffLines(fs.readFileSync(path.join(dir, file), 'utf8'), result.stdout);
+				// console.log({ file, changes });
+				if (changes.length > 0) {
+					results.push({ file, changes });
+				}
+			} catch (err) {
+				retVal.stderr += `${err}`;
+			}
+			retVal.stderr += result.stderr;
+		}
+		retVal.status = results.length > 0 ? 1 : 0;
+		retVal.stdout = JSON.stringify(results);
+		return retVal;
 	}
 
 	/**
@@ -98,55 +101,62 @@ class ClangFormat {
 
 		lintResult.error = [];
 
-		//console.log(output);
+		// console.log(output);
 		const files = JSON.parse(output.stdout);
 		for (const file of files) {
-			var line = 1;
-			var lineCount = 1;
-			var message = "";
+			let line = 1;
+			let lineCount = 1;
+			let message = "";
 
-			const addError = () => lintResult.error.push({
-					path: file.file,
-					firstLine: line,
-					lastLine: line + lineCount - 1,
-					message: message
-				});
+			const addError = () => {
+				if (message.length !== 0) {
+					lintResult.error.push({
+						path: file.file,
+						firstLine: line,
+						lastLine: line + lineCount - 1,
+						message
+					});
+					line += lineCount;
+					message = "";
+				}
+			};
 
-			const prefixLines = (text, prefix) => {
-				var lines = text.split(/\n/);
-				if (text.length > 1 && text.endsWith("\n")) {
+			const visibleWhitespace = (text) => text.replace(/ /g, "·").replace(/\t/g, "▸\t");
+
+			const formatLines = (text, prefix) => {
+				const lines = text.split(/\n/);
+				if (text.endsWith("\n")) {
 					lines.pop();
 				}
-				return lines.map((line) => prefix + line).join("\n");
+				return lines.map((l) => {
+					const lineParts = l.match(/^(\s*)(.*?)(\s*)$/);
+					return prefix + visibleWhitespace(lineParts[1]) + lineParts[2] + visibleWhitespace(lineParts[3]);
+				}).join("\n");
 			};
 	
 			for (const change of file.changes) {
+				if (!change.added) {
+					addError();
+				}
+
 				if (change.removed) {
-					if (message.length !== 0) {
-						addError();
-						line += lineCount;
-						error = "";
-					}
-					message += prefixLines(change.value, "- ") + "\n";
+					message += `${formatLines(change.value, "- ")}\n`;
 					lineCount = change.count;
 				} else if (change.added) {
-					message += "---\n";
-					message += prefixLines(change.value, "+ ");
-				} else {
 					if (message.length !== 0) {
-						addError();
-						line += lineCount;
-						message = "";
+						message += "***\n";
+					} else {
+						lineCount = change.count;
 					}
+					message += formatLines(change.value, "+ ");
+				} else {
 					line += change.count;
 				}
 			}
 
-			if (message.length !== 0) {
-				addError();
-			}
+			addError();
 		}
-		//console.log(lintResult);
+		// console.log(lintResult);
 
 		return lintResult;
 	}
